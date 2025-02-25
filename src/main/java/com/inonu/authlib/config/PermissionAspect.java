@@ -1,7 +1,8 @@
-package com.inonu.authlib.annottation;
+package com.inonu.authlib.config;
 
 
-import com.inonu.demo_app.service.PrivilegeCacheService;
+
+import com.inonu.authlib.service.PrivilegeCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -36,7 +37,7 @@ public class PermissionAspect {
         this.privilegeCacheService = privilegeCacheService;
     }
 
-    @Pointcut("@annotation(com.inonu.demo_app.config.CheckPermission)")
+    @Pointcut("@annotation(com.inonu.authlib.config.CheckPermission)")
     public void checkPermissionPointcut() {
     }
 

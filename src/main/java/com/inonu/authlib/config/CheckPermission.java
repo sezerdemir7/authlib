@@ -1,4 +1,4 @@
-package com.inonu.authlib.annottation;
+package com.inonu.authlib.config;
 
 
 import java.lang.annotation.ElementType;

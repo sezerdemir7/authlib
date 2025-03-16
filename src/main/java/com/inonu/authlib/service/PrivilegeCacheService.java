@@ -1,4 +1,4 @@
-package com.inonu.authlib.config;
+package com.inonu.authlib.service;
 
 
 import org.springframework.data.redis.core.RedisTemplate;

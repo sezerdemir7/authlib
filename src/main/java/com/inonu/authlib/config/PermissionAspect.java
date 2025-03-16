@@ -1,5 +1,6 @@
 package com.inonu.authlib.config;
 
+import com.inonu.authlib.service.PrivilegeCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;

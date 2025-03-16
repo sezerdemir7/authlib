@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.web.context.request.RequestContextListener;
 
 import java.util.List;
 
@@ -31,4 +32,10 @@ public class PermissionCheckerAutoConfiguration {
     public PermissionAspect permissionAspect(PrivilegeCacheService privilegeCacheService) {
         return new PermissionAspect(privilegeCacheService);
     }
+
+    @Bean
+    public RequestContextListener requestContextListener() {
+        return new RequestContextListener();
+    }
+
 }

@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.inonu</groupId>
 	<artifactId>authlib</artifactId>
-	<version>1.0.12</version>
+	<version>1.0.13</version>
 	<name>authlib</name>
 	<packaging>jar</packaging>
 	<description>A library for checking permissions in Spring Boot applications</description>
@@ -61,6 +61,7 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
 	</dependencies>
 
 	<distributionManagement>

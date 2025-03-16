@@ -7,9 +7,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 @SpringBootApplication
 @EnableAspectJAutoProxy
 public class AuthlibApplication {
-
 	public static void main(String[] args) {
 		SpringApplication.run(AuthlibApplication.class, args);
 	}
-
 }

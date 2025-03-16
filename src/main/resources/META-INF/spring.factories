@@ -1,2 +1,1 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-com.inonu.authlib.config.PermissionCheckerAutoConfiguration
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.inonu.authlib.config.PermissionCheckerAutoConfiguration

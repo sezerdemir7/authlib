@@ -33,7 +33,7 @@ public class PermissionAspect {
         this.privilegeCacheService = privilegeCacheService;
     }
 
-    @Pointcut("@annotation(com.inonu.permission_checker.CheckPermission)")
+    @Pointcut("@annotation(com.inonu.authlib.config.CheckPermission)")
     public void checkPermissionPointcut() {
     }
 

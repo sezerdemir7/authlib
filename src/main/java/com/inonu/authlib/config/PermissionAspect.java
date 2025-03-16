@@ -1,8 +1,5 @@
 package com.inonu.authlib.config;
 
-
-
-import com.inonu.authlib.service.PrivilegeCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -28,7 +25,6 @@ import java.util.List;
 @Aspect
 @Component
 public class PermissionAspect {
-
     private static final Logger logger = LoggerFactory.getLogger(PermissionAspect.class);
     private final PrivilegeCacheService privilegeCacheService;
     private final ExpressionParser parser = new SpelExpressionParser();
@@ -37,7 +33,7 @@ public class PermissionAspect {
         this.privilegeCacheService = privilegeCacheService;
     }
 
-    @Pointcut("@annotation(com.inonu.authlib.config.CheckPermission)")
+    @Pointcut("@annotation(com.inonu.permission_checker.CheckPermission)")
     public void checkPermissionPointcut() {
     }
 
@@ -103,6 +99,4 @@ public class PermissionAspect {
         }
         return null;
     }
-
-
 }

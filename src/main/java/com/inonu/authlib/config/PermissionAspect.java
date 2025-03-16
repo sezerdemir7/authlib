@@ -1,5 +1,7 @@
 package com.inonu.authlib.config;
 
+import com.inonu.authlib.exception.PrivilegeException;
+import com.inonu.authlib.exception.PrivilegeNotFoundException;
 import com.inonu.authlib.service.PrivilegeCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -45,7 +47,7 @@ public class PermissionAspect {
         // Request'ten userId'yi al
         String userId = getUserIdFromHeader();
         if (userId == null || userId.isEmpty()) {
-            throw new RuntimeException("Kullanıcı kimlik doğrulaması mevcut değil.");
+            throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
         }
 
         logger.info("Yetki kontrolü yapılan kullanıcı ID: {}", userId);
@@ -55,7 +57,7 @@ public class PermissionAspect {
         logger.info("Kullanıcının yetkileri: {}", privileges);
 
         if (privileges == null || privileges.isEmpty()) {
-            throw new RuntimeException("Kullanıcıya ait yetkiler bulunamadı.");
+            throw new PrivilegeNotFoundException("Kullanıcıya ait yetkiler bulunamadı.");
         }
 
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
@@ -66,7 +68,7 @@ public class PermissionAspect {
             String[] requiredRoleExpressions = permission.roles();
 
             if (requiredRoleExpressions == null || requiredRoleExpressions.length == 0) {
-                throw new RuntimeException("Gerekli roller belirtilmemiş.");
+                throw new PrivilegeException("Gerekli roller belirtilmemiş.");
             }
 
             // SpEL context ile method parametrelerini ayarla
@@ -84,7 +86,7 @@ public class PermissionAspect {
                     .anyMatch(privileges::contains);
 
             if (!hasPermission) {
-                throw new RuntimeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
+                throw new PrivilegeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
             }
         }
 

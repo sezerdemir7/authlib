@@ -1,7 +1,6 @@
 package com.inonu.authlib.config;
 
 import com.inonu.authlib.service.PrivilegeCacheService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -29,15 +28,14 @@ public class PermissionCheckerAutoConfiguration {
     }
 
     @Bean
-    public PermissionAspect permissionAspect(PrivilegeCacheService privilegeCacheService, HttpServletRequest request) {
-        return new PermissionAspect(privilegeCacheService, request);
+    public PermissionAspect permissionAspect(PrivilegeCacheService privilegeCacheService) {
+        return new PermissionAspect(privilegeCacheService);
     }
 
     @Bean
     public RequestContextListener requestContextListener() {
         return new RequestContextListener();
     }
-
 
 
 }

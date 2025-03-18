@@ -1,2 +1,1 @@
-com.inonu.authlib.config.AppConfig
 com.inonu.authlib.config.PermissionCheckerAutoConfiguration

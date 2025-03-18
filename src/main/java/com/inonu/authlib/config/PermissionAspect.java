@@ -1,11 +1,9 @@
 package com.inonu.authlib.config;
 
-
-
+import com.inonu.authlib.dto.PermissionRequest;
 import com.inonu.authlib.exception.PrivilegeException;
 import com.inonu.authlib.exception.PrivilegeNotFoundException;
 import com.inonu.authlib.service.PrivilegeCacheService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,10 +16,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
-
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -34,12 +29,10 @@ public class PermissionAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(PermissionAspect.class);
     private final PrivilegeCacheService privilegeCacheService;
-    private final HttpServletRequest request;  // Doğrudan enjekte ediliyor
     private final ExpressionParser parser = new SpelExpressionParser();
 
-    public PermissionAspect(PrivilegeCacheService privilegeCacheService, HttpServletRequest request) {
+    public PermissionAspect(PrivilegeCacheService privilegeCacheService) {
         this.privilegeCacheService = privilegeCacheService;
-        this.request = request;
     }
 
     @Pointcut("@annotation(com.inonu.authlib.config.CheckPermission)")
@@ -50,14 +43,31 @@ public class PermissionAspect {
     public Object checkPermission(ProceedingJoinPoint joinPoint) throws Throwable {
         logger.info("CheckPermission Aspect çalışıyor!");
 
-        // Request'ten userId'yi al
-        String userId = getUserIdFromHeader();
-        if (userId == null || userId.isEmpty()) {
-            logger.info("userId=null veya boş!");
-            throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        CheckPermission permission = method.getAnnotation(CheckPermission.class);
+
+        if (permission == null) {
+            return joinPoint.proceed();
         }
 
-        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}", userId);
+        Object[] args = joinPoint.getArgs();
+        PermissionRequest request = null;
+
+        for (Object arg : args) {
+            if (arg instanceof PermissionRequest) {
+                request = (PermissionRequest) arg;
+                break;
+            }
+        }
+
+        if (request == null || request.userId() == null || request.unitId() == null) {
+            throw new PrivilegeException("Geçersiz yetkilendirme isteği. userId veya unitId eksik!");
+        }
+
+        String userId = request.userId();
+        Long unitId = request.unitId();
+        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, Unit ID: {}", userId, unitId);
 
         // Hazelcast Cache üzerinden kullanıcının yetkilerini al
         List<String> privileges = privilegeCacheService.getUserPrivileges(userId);
@@ -67,52 +77,19 @@ public class PermissionAspect {
             throw new PrivilegeNotFoundException("Kullanıcıya ait yetkiler bulunamadı.");
         }
 
-        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
-        CheckPermission permission = method.getAnnotation(CheckPermission.class);
+        // SpEL context ile method parametrelerini ayarla
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        context.setVariable("request", request);
 
-        if (permission != null) {
-            String[] requiredRoleExpressions = permission.roles();
+        boolean hasPermission = Arrays.stream(permission.roles())
+                .map(expr -> parser.parseExpression(expr).getValue(context, String.class))
+                .anyMatch(privileges::contains);
 
-            if (requiredRoleExpressions == null || requiredRoleExpressions.length == 0) {
-                throw new PrivilegeException("Gerekli roller belirtilmemiş.");
-            }
-
-            // SpEL context ile method parametrelerini ayarla
-            StandardEvaluationContext context = new StandardEvaluationContext();
-            String[] parameterNames = signature.getParameterNames();
-            Object[] args = joinPoint.getArgs();
-            if (parameterNames != null) {
-                for (int i = 0; i < parameterNames.length; i++) {
-                    context.setVariable(parameterNames[i], args[i]);
-                }
-            }
-
-            boolean hasPermission = Arrays.stream(requiredRoleExpressions)
-                    .map(expr -> parser.parseExpression(expr).getValue(context, String.class))
-                    .anyMatch(privileges::contains);
-
-            if (!hasPermission) {
-                throw new PrivilegeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
-            }
+        if (!hasPermission) {
+            throw new PrivilegeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
         }
 
         logger.info("Yetkilendirme başarılı.");
         return joinPoint.proceed();
     }
-
-    private String getUserIdFromHeader() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-
-        HttpServletRequest request = attributes.getRequest();
-        String userId = request.getHeader("userId");
-        if (userId == null || userId.isEmpty()) {
-            logger.error("UserContextFilter ile alınan userId=null veya boş!");
-            return null;
-        }
-
-        return userId;
-    }
-
-
 }

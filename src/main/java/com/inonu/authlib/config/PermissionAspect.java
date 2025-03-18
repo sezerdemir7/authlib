@@ -61,12 +61,12 @@ public class PermissionAspect {
             }
         }
 
-        if (request == null || request.userId() == null || request.unitId() == null) {
+        if (request == null || request.getUserId() == null || request.getUnitId() == null) {
             throw new PrivilegeException("Geçersiz yetkilendirme isteği. userId veya unitId eksik!");
         }
 
-        String userId = request.userId();
-        Long unitId = request.unitId();
+        String userId = request.getUserId();
+        Long unitId = request.getUnitId();
         logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, Unit ID: {}", userId, unitId);
 
         // Hazelcast Cache üzerinden kullanıcının yetkilerini al

@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.inonu</groupId>
 	<artifactId>authlib</artifactId>
-	<version>1.0.25</version>
+	<version>1.0.26</version>
 	<name>authlib</name>
 	<packaging>jar</packaging>
 	<description>A library for checking permissions in Spring Boot applications</description>

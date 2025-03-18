@@ -43,30 +43,15 @@ public class PermissionAspect {
     public Object checkPermission(ProceedingJoinPoint joinPoint) throws Throwable {
         logger.info("CheckPermission Aspect çalışıyor!");
 
-        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
-        CheckPermission permission = method.getAnnotation(CheckPermission.class);
+        // Request parametrelerinden userId ve unitId al
+        String userId = getUserIdFromRequestParams(joinPoint);
+        Long unitId = getUnitIdFromRequestParams(joinPoint);
 
-        if (permission == null) {
-            return joinPoint.proceed();
+        if (userId == null || userId.isEmpty() || unitId == null) {
+            logger.error("Geçersiz yetkilendirme isteği. userId veya unitId eksik!");
+            throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
         }
 
-        Object[] args = joinPoint.getArgs();
-        PermissionRequest request = null;
-
-        for (Object arg : args) {
-            if (arg instanceof PermissionRequest) {
-                request = (PermissionRequest) arg;
-                break;
-            }
-        }
-
-        if (request == null || request.getUserId() == null || request.getUnitId() == null) {
-            throw new PrivilegeException("Geçersiz yetkilendirme isteği. userId veya unitId eksik!");
-        }
-
-        String userId = request.getUserId();
-        Long unitId = request.getUnitId();
         logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, Unit ID: {}", userId, unitId);
 
         // Hazelcast Cache üzerinden kullanıcının yetkilerini al
@@ -77,19 +62,52 @@ public class PermissionAspect {
             throw new PrivilegeNotFoundException("Kullanıcıya ait yetkiler bulunamadı.");
         }
 
-        // SpEL context ile method parametrelerini ayarla
-        StandardEvaluationContext context = new StandardEvaluationContext();
-        context.setVariable("request", request);
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        CheckPermission permission = method.getAnnotation(CheckPermission.class);
 
-        boolean hasPermission = Arrays.stream(permission.roles())
-                .map(expr -> parser.parseExpression(expr).getValue(context, String.class))
-                .anyMatch(privileges::contains);
+        if (permission != null) {
+            String[] requiredRoleExpressions = permission.roles();
+            if (requiredRoleExpressions == null || requiredRoleExpressions.length == 0) {
+                throw new PrivilegeException("Gerekli roller belirtilmemiş.");
+            }
 
-        if (!hasPermission) {
-            throw new PrivilegeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
+            // SpEL context ile method parametrelerini ayarla
+            StandardEvaluationContext context = new StandardEvaluationContext();
+            context.setVariable("userId", userId);
+            context.setVariable("unitId", unitId);
+
+            boolean hasPermission = Arrays.stream(requiredRoleExpressions)
+                    .map(expr -> parser.parseExpression(expr).getValue(context, String.class))
+                    .anyMatch(privileges::contains);
+
+            if (!hasPermission) {
+                throw new PrivilegeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
+            }
         }
 
         logger.info("Yetkilendirme başarılı.");
         return joinPoint.proceed();
     }
+
+    private String getUserIdFromRequestParams(ProceedingJoinPoint joinPoint) {
+        Object[] args = joinPoint.getArgs();
+        for (Object arg : args) {
+            if (arg instanceof String) {
+                return (String) arg;  // userId'yi al
+            }
+        }
+        return null;
+    }
+
+    private Long getUnitIdFromRequestParams(ProceedingJoinPoint joinPoint) {
+        Object[] args = joinPoint.getArgs();
+        for (Object arg : args) {
+            if (arg instanceof Long) {
+                return (Long) arg;  // unitId'yi al
+            }
+        }
+        return null;
+    }
+
 }

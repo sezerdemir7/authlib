@@ -1,9 +1,11 @@
 package com.inonu.authlib.config;
 
+
+
 import com.inonu.authlib.exception.PrivilegeException;
 import com.inonu.authlib.exception.PrivilegeNotFoundException;
 import com.inonu.authlib.service.PrivilegeCacheService;
-import com.inonu.authlib.config.RequestContextUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -16,7 +18,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
+
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -26,6 +31,7 @@ import java.util.List;
 @Aspect
 @Component
 public class PermissionAspect {
+
     private static final Logger logger = LoggerFactory.getLogger(PermissionAspect.class);
     private final PrivilegeCacheService privilegeCacheService;
     private final ExpressionParser parser = new SpelExpressionParser();
@@ -43,14 +49,15 @@ public class PermissionAspect {
         logger.info("CheckPermission Aspect çalışıyor!");
 
         // Request'ten userId'yi al
-        String userId = RequestContextUtil.getHeaderValue("userId");
+        String userId = getUserIdFromHeader();
         if (userId == null || userId.isEmpty()) {
+            logger.info("userId=!"+userId);
             throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
         }
 
         logger.info("Yetki kontrolü yapılan kullanıcı ID: {}", userId);
 
-        // Redis Cache üzerinden kullanıcının yetkilerini al
+        // Hazelcast Cache üzerinden kullanıcının yetkilerini al
         List<String> privileges = privilegeCacheService.getUserPrivileges(userId);
         logger.info("Kullanıcının yetkileri: {}", privileges);
 
@@ -69,6 +76,7 @@ public class PermissionAspect {
                 throw new PrivilegeException("Gerekli roller belirtilmemiş.");
             }
 
+            // SpEL context ile method parametrelerini ayarla
             StandardEvaluationContext context = new StandardEvaluationContext();
             String[] parameterNames = signature.getParameterNames();
             Object[] args = joinPoint.getArgs();
@@ -89,5 +97,14 @@ public class PermissionAspect {
 
         logger.info("Yetkilendirme başarılı.");
         return joinPoint.proceed();
+    }
+
+    private String getUserIdFromHeader() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes != null) {
+            HttpServletRequest request = attributes.getRequest();
+            return request.getHeader("userId");
+        }
+        return null;
     }
 }

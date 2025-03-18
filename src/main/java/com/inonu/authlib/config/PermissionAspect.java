@@ -27,7 +27,7 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.LOWEST_PRECEDENCE)
 @Aspect
 @Component
 public class PermissionAspect {

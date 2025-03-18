@@ -102,6 +102,29 @@ public class PermissionAspect {
     }
 
     private String getUserIdFromHeader() {
-        return request.getHeader("userId");
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+        if (attributes == null) {
+            logger.error("RequestContextHolder boş! HTTP isteğine erişilemiyor.");
+            return null;
+        }
+
+        HttpServletRequest request = attributes.getRequest();
+
+        if (request == null) {
+            logger.error("HttpServletRequest nesnesi boş!");
+            return null;
+        }
+
+        String userId = request.getHeader("userId");
+
+        if (userId == null || userId.isEmpty()) {
+            logger.error("userId=null veya boş!");
+        } else {
+            logger.info("userId: {}", userId);
+        }
+
+        return userId;
     }
+
 }

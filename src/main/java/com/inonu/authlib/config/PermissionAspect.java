@@ -102,6 +102,8 @@ public class PermissionAspect {
     }
 
     private String getUserIdFromHeader() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
         String userId = UserContextFilter.getUserId();
         if (userId == null || userId.isEmpty()) {
             logger.error("UserContextFilter ile alınan userId=null veya boş!");

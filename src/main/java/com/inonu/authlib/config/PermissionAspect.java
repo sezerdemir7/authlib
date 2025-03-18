@@ -1,7 +1,5 @@
 package com.inonu.authlib.config;
 
-
-
 import com.inonu.authlib.exception.PrivilegeException;
 import com.inonu.authlib.exception.PrivilegeNotFoundException;
 import com.inonu.authlib.service.PrivilegeCacheService;
@@ -18,10 +16,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
-
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.context.request.RequestContextListener;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -34,10 +30,12 @@ public class PermissionAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(PermissionAspect.class);
     private final PrivilegeCacheService privilegeCacheService;
+    private final HttpServletRequest request;  // Doğrudan enjekte ediliyor
     private final ExpressionParser parser = new SpelExpressionParser();
 
-    public PermissionAspect(PrivilegeCacheService privilegeCacheService) {
+    public PermissionAspect(PrivilegeCacheService privilegeCacheService, HttpServletRequest request) {
         this.privilegeCacheService = privilegeCacheService;
+        this.request = request;
     }
 
     @Pointcut("@annotation(com.inonu.authlib.config.CheckPermission)")
@@ -51,7 +49,7 @@ public class PermissionAspect {
         // Request'ten userId'yi al
         String userId = getUserIdFromHeader();
         if (userId == null || userId.isEmpty()) {
-            logger.info("userId=!"+userId);
+            logger.info("userId=null veya boş!");
             throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
         }
 
@@ -100,11 +98,6 @@ public class PermissionAspect {
     }
 
     private String getUserIdFromHeader() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes != null) {
-            HttpServletRequest request = attributes.getRequest();
-            return request.getHeader("userId");
-        }
-        return null;
+        return request.getHeader("userId");
     }
 }

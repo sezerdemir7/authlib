@@ -1,5 +1,7 @@
 package com.inonu.authlib.config;
 
+
+
 import com.inonu.authlib.exception.PrivilegeException;
 import com.inonu.authlib.exception.PrivilegeNotFoundException;
 import com.inonu.authlib.service.PrivilegeCacheService;
@@ -16,8 +18,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
+
 import org.springframework.stereotype.Component;
-import org.springframework.web.context.request.RequestContextListener;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;

@@ -1,5 +1,6 @@
 package com.inonu.authlib.exception;
 
+import com.inonu.authlib.dto.RestResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -36,12 +37,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler(PrivilegeNotFoundException.class)
-    public ResponseEntity<String> handlePrivilegeNotFoundException(PrivilegeNotFoundException exception) {
-        return new ResponseEntity<>(exception.getMessage(), HttpStatus.NOT_FOUND);
+    public ResponseEntity<RestResponse<String>> handlePrivilegeNotFoundException(PrivilegeNotFoundException exception) {
+        return new ResponseEntity<>(RestResponse.error(exception.getMessage()), HttpStatus.NOT_FOUND);
     }
     @ExceptionHandler(PrivilegeException.class)
-    public ResponseEntity<String> handlePrivilegeException(PrivilegeException exception) {
-        return new ResponseEntity<>(exception.getMessage(), HttpStatus.FORBIDDEN);
+    public ResponseEntity<RestResponse<String>> handlePrivilegeException(PrivilegeException exception) {
+        return new ResponseEntity<>(RestResponse.error(exception.getMessage()), HttpStatus.FORBIDDEN);
     }
 
 

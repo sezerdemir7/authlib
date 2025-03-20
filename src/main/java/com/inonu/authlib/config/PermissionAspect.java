@@ -1,6 +1,5 @@
 package com.inonu.authlib.config;
 
-import com.inonu.authlib.dto.PermissionRequest;
 import com.inonu.authlib.exception.PrivilegeException;
 import com.inonu.authlib.exception.PrivilegeNotFoundException;
 import com.inonu.authlib.service.PrivilegeCacheService;
@@ -43,18 +42,17 @@ public class PermissionAspect {
     public Object checkPermission(ProceedingJoinPoint joinPoint) throws Throwable {
         logger.info("CheckPermission Aspect çalışıyor!");
 
-        // Request parametrelerinden userId ve unitId al
         String userId = getUserIdFromRequestParams(joinPoint);
         Long unitId = getUnitIdFromRequestParams(joinPoint);
+        Long appId = getAppIdFromRequestParams(joinPoint);
 
-        if (userId == null || userId.isEmpty() || unitId == null) {
-            logger.error("Geçersiz yetkilendirme isteği. userId veya unitId eksik!");
+        if (userId == null || userId.isEmpty() || unitId == null || appId == null) {
+            logger.error("Geçersiz yetkilendirme isteği. userId, unitId veya appId eksik!");
             throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
         }
 
-        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, Unit ID: {}", userId, unitId);
+        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, App ID: {}, Unit ID: {}", userId, appId, unitId);
 
-        // Hazelcast Cache üzerinden kullanıcının yetkilerini al
         List<String> privileges = privilegeCacheService.getUserPrivileges(userId);
         logger.info("Kullanıcının yetkileri: {}", privileges);
 
@@ -72,13 +70,17 @@ public class PermissionAspect {
                 throw new PrivilegeException("Gerekli roller belirtilmemiş.");
             }
 
-            // SpEL context ile method parametrelerini ayarla
             StandardEvaluationContext context = new StandardEvaluationContext();
             context.setVariable("userId", userId);
             context.setVariable("unitId", unitId);
+            context.setVariable("appId", appId);
 
             boolean hasPermission = Arrays.stream(requiredRoleExpressions)
-                    .map(expr -> parser.parseExpression(expr).getValue(context, String.class))
+                    .map(expr -> {
+                        String generatedPermission = parser.parseExpression(expr).getValue(context, String.class);
+                        logger.info("SpEL tarafından oluşturulan yetki ifadesi: {}", generatedPermission);
+                        return generatedPermission;
+                    })
                     .anyMatch(privileges::contains);
 
             if (!hasPermission) {
@@ -91,23 +93,29 @@ public class PermissionAspect {
     }
 
     private String getUserIdFromRequestParams(ProceedingJoinPoint joinPoint) {
-        Object[] args = joinPoint.getArgs();
-        for (Object arg : args) {
+        for (Object arg : joinPoint.getArgs()) {
             if (arg instanceof String) {
-                return (String) arg;  // userId'yi al
+                return (String) arg;
             }
         }
         return null;
     }
 
     private Long getUnitIdFromRequestParams(ProceedingJoinPoint joinPoint) {
-        Object[] args = joinPoint.getArgs();
-        for (Object arg : args) {
+        for (Object arg : joinPoint.getArgs()) {
             if (arg instanceof Long) {
-                return (Long) arg;  // unitId'yi al
+                return (Long) arg;
             }
         }
         return null;
     }
 
+    private Long getAppIdFromRequestParams(ProceedingJoinPoint joinPoint) {
+        for (Object arg : joinPoint.getArgs()) {
+            if (arg instanceof Long) {
+                return (Long) arg;
+            }
+        }
+        return null;
+    }
 }

@@ -42,9 +42,9 @@ public class PermissionAspect {
     public Object checkPermission(ProceedingJoinPoint joinPoint) throws Throwable {
         logger.info("CheckPermission Aspect çalışıyor!");
 
-        String userId = getUserIdFromRequestParams(joinPoint);
-        Long unitId = getUnitIdFromRequestParams(joinPoint);
-        Long appId = getAppIdFromRequestParams(joinPoint);
+        String userId = getParameterValueByName(joinPoint, "userId", String.class);
+        Long unitId = getParameterValueByName(joinPoint, "unitId", Long.class);
+        Long appId = getParameterValueByName(joinPoint, "appId", Long.class);
 
         if (userId == null || userId.isEmpty() || unitId == null || appId == null) {
             logger.error("Geçersiz yetkilendirme isteği. userId, unitId veya appId eksik!");
@@ -92,28 +92,14 @@ public class PermissionAspect {
         return joinPoint.proceed();
     }
 
-    private String getUserIdFromRequestParams(ProceedingJoinPoint joinPoint) {
-        for (Object arg : joinPoint.getArgs()) {
-            if (arg instanceof String) {
-                return (String) arg;
-            }
-        }
-        return null;
-    }
+    private <T> T getParameterValueByName(ProceedingJoinPoint joinPoint, String name, Class<T> clazz) {
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        String[] paramNames = signature.getParameterNames();
+        Object[] args = joinPoint.getArgs();
 
-    private Long getUnitIdFromRequestParams(ProceedingJoinPoint joinPoint) {
-        for (Object arg : joinPoint.getArgs()) {
-            if (arg instanceof Long) {
-                return (Long) arg;
-            }
-        }
-        return null;
-    }
-
-    private Long getAppIdFromRequestParams(ProceedingJoinPoint joinPoint) {
-        for (Object arg : joinPoint.getArgs()) {
-            if (arg instanceof Long) {
-                return (Long) arg;
+        for (int i = 0; i < paramNames.length; i++) {
+            if (paramNames[i].equals(name) && clazz.isInstance(args[i])) {
+                return clazz.cast(args[i]);
             }
         }
         return null;

@@ -67,7 +67,7 @@ public class PermissionAspect {
         } catch (Exception ignored) {}
 
         if (userId == null || userId.isEmpty() || unitId == null || appId == null) {
-            logger.error("Geçersiz yetkilendirme isteği. userId, unitId veya appId eksik!");
+            logger.error("Geçersiz yetkilendirme isteği. userId, unitId veya appId eksik!"+userId +"-"+unitId+"-"+"-"+appId);
             throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
         }
 

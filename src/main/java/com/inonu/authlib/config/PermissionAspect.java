@@ -27,7 +27,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
-
 @Order(Ordered.LOWEST_PRECEDENCE)
 @Aspect
 @Component
@@ -55,16 +54,10 @@ public class PermissionAspect {
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
         String userId = request != null ? request.getHeader("userId") : null;
 
-        // unitId: Önce RequestParam, sonra PathVariable, en son RequestBody'den alınır
-        Long unitId = getUnitIdFromRequestParam(joinPoint);
-        if (unitId == null) {
-            unitId = getUnitIdFromPathVariable(joinPoint);
-        }
-        if (unitId == null) {
-            unitId = getUnitIdFromRequestBody(joinPoint);
-        }
+        // unitId: Önce RequestParam, sonra PathVariable, en son RequestBody'den alınır, yoksa header'dan alınır
+        Long unitId = resolveUnitId(joinPoint, request);
 
-        // appId application.properties'ten (ör: app.id=1)
+        // appId application.properties'ten alınır (ör: app.id=1)
         String appIdProp = environment != null ? environment.getProperty("app.id") : null;
         Long appId = null;
         if (appIdProp != null) {
@@ -72,6 +65,43 @@ public class PermissionAspect {
         }
 
         // Eksik olan alanları logla
+        validateFields(userId, unitId, appId, appIdProp);
+
+        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, App ID: {}, Unit ID: {}", userId, appId, unitId);
+
+        List<String> privileges = privilegeCacheService.getUserPrivileges(userId);
+        logger.info("Kullanıcının yetkileri: {}", privileges);
+
+        checkPermissions(joinPoint, privileges, appId, unitId);
+
+        logger.info("Yetkilendirme başarılı.");
+        return joinPoint.proceed();
+    }
+
+    private Long resolveUnitId(ProceedingJoinPoint joinPoint, HttpServletRequest request) {
+        // Öncelik sırasıyla unitId'yi bul
+        Long unitId = getUnitIdFromRequestParam(joinPoint);
+        if (unitId == null) {
+            unitId = getUnitIdFromPathVariable(joinPoint);
+        }
+        if (unitId == null) {
+            unitId = getUnitIdFromRequestBody(joinPoint);
+        }
+        if (unitId == null && request != null) {
+            // Eğer unitId hala null ise header'dan al
+            String unitIdHeader = request.getHeader("unitId");
+            if (unitIdHeader != null) {
+                try { unitId = Long.valueOf(unitIdHeader); } catch (NumberFormatException ignored) {}
+            }
+        }
+        // Eğer unitId hala null ise logla ve null döndür
+        if (unitId == null) {
+            logger.warn("unitId bulunamadı ve hiçbir kaynaktan çekilemedi.");
+        }
+        return unitId;
+    }
+
+    private void validateFields(String userId, Long unitId, Long appId, String appIdProp) {
         boolean userIdMissing = (userId == null || userId.isEmpty());
         boolean unitIdMissing = (unitId == null);
         boolean appIdMissing = (appId == null);
@@ -80,7 +110,7 @@ public class PermissionAspect {
             logger.error(
                     "Geçersiz yetkilendirme isteği! Eksik alanlar: {}{}{}. " +
                             "[userId headerdan: '{}'] " +
-                            "[unitId param/annotation/body: '{}'] " +
+                            "[unitId param/annotation/body/header: '{}'] " +
                             "[appId property: '{}']",
                     userIdMissing ? "userId " : "",
                     unitIdMissing ? "unitId " : "",
@@ -94,12 +124,9 @@ public class PermissionAspect {
                             (appIdMissing ? "appId" : "")
             );
         }
+    }
 
-        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, App ID: {}, Unit ID: {}", userId, appId, unitId);
-
-        List<String> privileges = privilegeCacheService.getUserPrivileges(userId);
-        logger.info("Kullanıcının yetkileri: {}", privileges);
-
+    private void checkPermissions(ProceedingJoinPoint joinPoint, List<String> privileges, Long appId, Long unitId) throws PrivilegeException {
         if (privileges == null || privileges.isEmpty()) {
             throw new PrivilegeNotFoundException("Kullanıcıya ait yetkiler bulunamadı.");
         }
@@ -113,11 +140,9 @@ public class PermissionAspect {
             if (roleSuffixes == null || roleSuffixes.length == 0) {
                 throw new PrivilegeException("Gerekli roller belirtilmemiş.");
             }
-            final Long finalAppId = appId;
-            final Long finalUnitId = unitId;
 
             boolean hasPermission = Arrays.stream(roleSuffixes)
-                    .map(suffix -> "APP" + finalAppId + "_UNIT" + finalUnitId + suffix)
+                    .map(suffix -> "APP" + appId + "_UNIT" + unitId + "_" + suffix)
                     .peek(fullRole -> logger.info("Oluşan yetki ifadesi: {}", fullRole))
                     .anyMatch(privileges::contains);
 
@@ -125,13 +150,10 @@ public class PermissionAspect {
                 throw new PrivilegeException("Yetkilendirme hatası: Gerekli yetkilere sahip değilsiniz!");
             }
         }
-
-        logger.info("Yetkilendirme başarılı.");
-        return joinPoint.proceed();
     }
 
-    // RequestParam ile işaretlenmiş unitId parametresini bul
     private Long getUnitIdFromRequestParam(ProceedingJoinPoint joinPoint) {
+        // Metot parametrelerinden unitId'yi bulmaya çalış
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         Annotation[][] paramAnnotations = method.getParameterAnnotations();
@@ -154,8 +176,8 @@ public class PermissionAspect {
         return null;
     }
 
-    // PathVariable ile işaretlenmiş unitId parametresini bul
     private Long getUnitIdFromPathVariable(ProceedingJoinPoint joinPoint) {
+        // Metot parametrelerinden PathVariable unitId'yi bulmaya çalış
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         Annotation[][] paramAnnotations = method.getParameterAnnotations();
@@ -178,8 +200,8 @@ public class PermissionAspect {
         return null;
     }
 
-    // RequestBody içindeki unitId alanını bul
     private Long getUnitIdFromRequestBody(ProceedingJoinPoint joinPoint) {
+        // RequestBody'den unitId'yi bulmaya çalış
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         Annotation[][] paramAnnotations = method.getParameterAnnotations();

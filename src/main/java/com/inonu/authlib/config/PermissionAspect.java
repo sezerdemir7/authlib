@@ -10,13 +10,15 @@ import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.expression.ExpressionParser;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
@@ -28,10 +30,12 @@ public class PermissionAspect {
 
     private static final Logger logger = LoggerFactory.getLogger(PermissionAspect.class);
     private final PrivilegeCacheService privilegeCacheService;
-    private final ExpressionParser parser = new SpelExpressionParser();
+    private final Environment environment;
 
-    public PermissionAspect(PrivilegeCacheService privilegeCacheService) {
+    @Autowired
+    public PermissionAspect(PrivilegeCacheService privilegeCacheService, Environment environment) {
         this.privilegeCacheService = privilegeCacheService;
+        this.environment = environment;
     }
 
     @Pointcut("@annotation(com.inonu.authlib.config.CheckPermission)")
@@ -42,9 +46,25 @@ public class PermissionAspect {
     public Object checkPermission(ProceedingJoinPoint joinPoint) throws Throwable {
         logger.info("CheckPermission Aspect çalışıyor!");
 
+        // userId ve unitId önce parametrelerden, yoksa headerdan
         String userId = getParameterValueByName(joinPoint, "userId", String.class);
         Long unitId = getParameterValueByName(joinPoint, "unitId", Long.class);
-        Long appId = getParameterValueByName(joinPoint, "appId", Long.class);
+
+        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
+        if ((userId == null || userId.isEmpty()) && request.getHeader("userId") != null) {
+            userId = request.getHeader("userId");
+        }
+        if (unitId == null && request.getHeader("unitId") != null) {
+            try {
+                unitId = Long.valueOf(request.getHeader("unitId"));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        // appId application.properties'ten (ör: app.id=1)
+        Long appId = null;
+        try {
+            appId = Long.valueOf(environment.getProperty("app.id"));
+        } catch (Exception ignored) {}
 
         if (userId == null || userId.isEmpty() || unitId == null || appId == null) {
             logger.error("Geçersiz yetkilendirme isteği. userId, unitId veya appId eksik!");
@@ -65,22 +85,16 @@ public class PermissionAspect {
         CheckPermission permission = method.getAnnotation(CheckPermission.class);
 
         if (permission != null) {
-            String[] requiredRoleExpressions = permission.roles();
-            if (requiredRoleExpressions == null || requiredRoleExpressions.length == 0) {
+            String[] roleSuffixes = permission.roles();
+            if (roleSuffixes == null || roleSuffixes.length == 0) {
                 throw new PrivilegeException("Gerekli roller belirtilmemiş.");
             }
+            final Long finalAppId = appId;
+            final Long finalUnitId = unitId;
 
-            StandardEvaluationContext context = new StandardEvaluationContext();
-            context.setVariable("userId", userId);
-            context.setVariable("unitId", unitId);
-            context.setVariable("appId", appId);
-
-            boolean hasPermission = Arrays.stream(requiredRoleExpressions)
-                    .map(expr -> {
-                        String generatedPermission = parser.parseExpression(expr).getValue(context, String.class);
-                        logger.info("SpEL tarafından oluşturulan yetki ifadesi: {}", generatedPermission);
-                        return generatedPermission;
-                    })
+            boolean hasPermission = Arrays.stream(roleSuffixes)
+                    .map(suffix -> "APP" + finalAppId + "_UNIT" + finalUnitId + suffix)
+                    .peek(fullRole -> logger.info("Oluşan yetki ifadesi: {}", fullRole))
                     .anyMatch(privileges::contains);
 
             if (!hasPermission) {

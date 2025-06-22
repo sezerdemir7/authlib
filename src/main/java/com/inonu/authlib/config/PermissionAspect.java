@@ -47,28 +47,50 @@ public class PermissionAspect {
         logger.info("CheckPermission Aspect çalışıyor!");
 
         // userId ve unitId önce parametrelerden, yoksa headerdan
-        String userId = getParameterValueByName(joinPoint, "userId", String.class);
-        Long unitId = getParameterValueByName(joinPoint, "unitId", Long.class);
+        String userIdParam = getParameterValueByName(joinPoint, "userId", String.class);
+        Long unitIdParam = getParameterValueByName(joinPoint, "unitId", Long.class);
 
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-        if ((userId == null || userId.isEmpty()) && request.getHeader("userId") != null) {
-            userId = request.getHeader("userId");
-        }
-        if (unitId == null && request.getHeader("unitId") != null) {
-            try {
-                unitId = Long.valueOf(request.getHeader("unitId"));
-            } catch (NumberFormatException ignored) {}
+        String userIdHeader = request != null ? request.getHeader("userId") : null;
+        String unitIdHeaderString = request != null ? request.getHeader("unitId") : null;
+        Long unitIdHeader = null;
+        if (unitIdHeaderString != null) {
+            try { unitIdHeader = Long.valueOf(unitIdHeaderString); } catch (NumberFormatException ignored) {}
         }
 
         // appId application.properties'ten (ör: app.id=1)
+        String appIdProp = environment != null ? environment.getProperty("app.id") : null;
         Long appId = null;
-        try {
-            appId = Long.valueOf(environment.getProperty("app.id"));
-        } catch (Exception ignored) {}
+        if (appIdProp != null) {
+            try { appId = Long.valueOf(appIdProp); } catch (NumberFormatException ignored) {}
+        }
 
-        if (userId == null || userId.isEmpty() || unitId == null || appId == null) {
-            logger.error("Geçersiz yetkilendirme isteği. userId, unitId veya appId eksik!"+userId +"-"+unitId+"-"+"-"+appId);
-            throw new PrivilegeNotFoundException("Kullanıcı kimlik doğrulaması mevcut değil.");
+        // Son haliyle değer atamaları
+        String userId = userIdParam != null && !userIdParam.isEmpty() ? userIdParam : userIdHeader;
+        Long unitId = unitIdParam != null ? unitIdParam : unitIdHeader;
+
+        // Eksik olan alanları logla
+        boolean userIdMissing = (userId == null || userId.isEmpty());
+        boolean unitIdMissing = (unitId == null);
+        boolean appIdMissing = (appId == null);
+
+        if (userIdMissing || unitIdMissing || appIdMissing) {
+            logger.error(
+                    "Geçersiz yetkilendirme isteği! Eksik alanlar: {}{}{}. " +
+                            "[userId parametreden: '{}', headerdan: '{}'] " +
+                            "[unitId parametreden: '{}', headerdan: '{}'] " +
+                            "[appId property: '{}']",
+                    userIdMissing ? "userId " : "",
+                    unitIdMissing ? "unitId " : "",
+                    appIdMissing ? "appId" : "",
+                    userIdParam, userIdHeader, unitIdParam, unitIdHeader, appIdProp
+            );
+            throw new PrivilegeNotFoundException(
+                    "Kullanıcı kimlik doğrulaması mevcut değil. Eksik alan(lar): " +
+                            (userIdMissing ? "userId " : "") +
+                            (unitIdMissing ? "unitId " : "") +
+                            (appIdMissing ? "appId" : "")
+            );
         }
 
         logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, App ID: {}, Unit ID: {}", userId, appId, unitId);

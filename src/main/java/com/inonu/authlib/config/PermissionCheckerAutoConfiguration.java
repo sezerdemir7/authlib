@@ -3,6 +3,7 @@ package com.inonu.authlib.config;
 import com.inonu.authlib.service.PrivilegeCacheService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -28,8 +29,8 @@ public class PermissionCheckerAutoConfiguration {
     }
 
     @Bean
-    public PermissionAspect permissionAspect(PrivilegeCacheService privilegeCacheService) {
-        return new PermissionAspect(privilegeCacheService);
+    public PermissionAspect permissionAspect(PrivilegeCacheService privilegeCacheService, Environment environment) {
+        return new PermissionAspect(privilegeCacheService, environment);
     }
 
     @Bean

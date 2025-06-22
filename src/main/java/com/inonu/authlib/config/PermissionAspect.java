@@ -51,32 +51,25 @@ public class PermissionAspect {
     public Object checkPermission(ProceedingJoinPoint joinPoint) throws Throwable {
         logger.info("CheckPermission Aspect çalışıyor!");
 
-        // userId ve unitId önce parametrelerden
-        String userIdParam = getParameterValueByName(joinPoint, "userId", String.class);
-        // unitId önce parametrelerden, sonra PathVariable, RequestParam, RequestBody'den
-        Long unitIdParam = getParameterValueByName(joinPoint, "unitId", Long.class);
-
-        if (unitIdParam == null) {
-            unitIdParam = extractUnitIdFromAnnotations(joinPoint);
-        }
-        if (unitIdParam == null) {
-            unitIdParam = extractUnitIdFromRequestBody(joinPoint);
-        }
-
-        // userId header'dan da alınabilir, unitId artık header'dan alınmaz
+        // userId sadece header'dan alınır
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();
-        String userIdHeader = request != null ? request.getHeader("userId") : null;
+        String userId = request != null ? request.getHeader("userId") : null;
 
-        // appId application.properties'ten
+        // unitId: Önce RequestParam, sonra PathVariable, en son RequestBody'den alınır
+        Long unitId = getUnitIdFromRequestParam(joinPoint);
+        if (unitId == null) {
+            unitId = getUnitIdFromPathVariable(joinPoint);
+        }
+        if (unitId == null) {
+            unitId = getUnitIdFromRequestBody(joinPoint);
+        }
+
+        // appId application.properties'ten (ör: app.id=1)
         String appIdProp = environment != null ? environment.getProperty("app.id") : null;
         Long appId = null;
         if (appIdProp != null) {
             try { appId = Long.valueOf(appIdProp); } catch (NumberFormatException ignored) {}
         }
-
-        // Son haliyle değer atamaları
-        String userId = userIdParam != null && !userIdParam.isEmpty() ? userIdParam : userIdHeader;
-        Long unitId = unitIdParam;
 
         // Eksik olan alanları logla
         boolean userIdMissing = (userId == null || userId.isEmpty());
@@ -86,13 +79,13 @@ public class PermissionAspect {
         if (userIdMissing || unitIdMissing || appIdMissing) {
             logger.error(
                     "Geçersiz yetkilendirme isteği! Eksik alanlar: {}{}{}. " +
-                            "[userId parametreden: '{}', headerdan: '{}'] " +
-                            "[unitId parametreden/annotation/body: '{}'] " +
+                            "[userId headerdan: '{}'] " +
+                            "[unitId param/annotation/body: '{}'] " +
                             "[appId property: '{}']",
                     userIdMissing ? "userId " : "",
                     unitIdMissing ? "unitId " : "",
                     appIdMissing ? "appId" : "",
-                    userIdParam, userIdHeader, unitIdParam, appIdProp
+                    userId, unitId, appIdProp
             );
             throw new PrivilegeNotFoundException(
                     "Kullanıcı kimlik doğrulaması mevcut değil. Eksik alan(lar): " +
@@ -137,38 +130,23 @@ public class PermissionAspect {
         return joinPoint.proceed();
     }
 
-    private <T> T getParameterValueByName(ProceedingJoinPoint joinPoint, String name, Class<T> clazz) {
+    // RequestParam ile işaretlenmiş unitId parametresini bul
+    private Long getUnitIdFromRequestParam(ProceedingJoinPoint joinPoint) {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        String[] paramNames = signature.getParameterNames();
-        Object[] args = joinPoint.getArgs();
-
-        for (int i = 0; i < paramNames.length; i++) {
-            if (paramNames[i].equals(name) && clazz.isInstance(args[i])) {
-                return clazz.cast(args[i]);
-            }
-        }
-        return null;
-    }
-
-    // PathVariable veya RequestParam annotation'ı ile işaretlenmiş parametrelerden unitId'yi bul
-    private Long extractUnitIdFromAnnotations(ProceedingJoinPoint joinPoint) {
-        MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
-        Method method = methodSignature.getMethod();
+        Method method = signature.getMethod();
         Annotation[][] paramAnnotations = method.getParameterAnnotations();
         Object[] args = joinPoint.getArgs();
 
         for (int i = 0; i < paramAnnotations.length; i++) {
             for (Annotation annotation : paramAnnotations[i]) {
-                if ((annotation instanceof PathVariable && isUnitIdAnnotation(((PathVariable) annotation).value(), ((PathVariable) annotation).name()))
-                        || (annotation instanceof RequestParam && isUnitIdAnnotation(((RequestParam) annotation).value(), ((RequestParam) annotation).name()))) {
-                    Object arg = args[i];
-                    if (arg instanceof Long) {
-                        return (Long) arg;
-                    }
-                    if (arg instanceof String) {
-                        try {
-                            return Long.valueOf((String) arg);
-                        } catch (NumberFormatException ignored) {}
+                if (annotation instanceof RequestParam) {
+                    RequestParam requestParam = (RequestParam) annotation;
+                    if ("unitId".equals(requestParam.value()) || "unitId".equals(requestParam.name())) {
+                        Object arg = args[i];
+                        if (arg instanceof Long) return (Long) arg;
+                        if (arg instanceof String) {
+                            try { return Long.valueOf((String) arg); } catch (NumberFormatException ignored) {}
+                        }
                     }
                 }
             }
@@ -176,14 +154,34 @@ public class PermissionAspect {
         return null;
     }
 
-    private boolean isUnitIdAnnotation(String value, String name) {
-        return "unitId".equals(value) || "unitId".equals(name);
+    // PathVariable ile işaretlenmiş unitId parametresini bul
+    private Long getUnitIdFromPathVariable(ProceedingJoinPoint joinPoint) {
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        Annotation[][] paramAnnotations = method.getParameterAnnotations();
+        Object[] args = joinPoint.getArgs();
+
+        for (int i = 0; i < paramAnnotations.length; i++) {
+            for (Annotation annotation : paramAnnotations[i]) {
+                if (annotation instanceof PathVariable) {
+                    PathVariable pathVariable = (PathVariable) annotation;
+                    if ("unitId".equals(pathVariable.value()) || "unitId".equals(pathVariable.name())) {
+                        Object arg = args[i];
+                        if (arg instanceof Long) return (Long) arg;
+                        if (arg instanceof String) {
+                            try { return Long.valueOf((String) arg); } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
-    // Eğer RequestBody varsa ve içeriği unitId içeriyorsa onu döndür
-    private Long extractUnitIdFromRequestBody(ProceedingJoinPoint joinPoint) {
-        MethodSignature methodSignature = (MethodSignature) joinPoint.getSignature();
-        Method method = methodSignature.getMethod();
+    // RequestBody içindeki unitId alanını bul
+    private Long getUnitIdFromRequestBody(ProceedingJoinPoint joinPoint) {
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
         Annotation[][] paramAnnotations = method.getParameterAnnotations();
         Object[] args = joinPoint.getArgs();
 
@@ -191,18 +189,13 @@ public class PermissionAspect {
             for (Annotation annotation : paramAnnotations[i]) {
                 if (annotation instanceof RequestBody && args[i] != null) {
                     Object requestBody = args[i];
-                    // Eğer doğrudan bir alan varsa
                     try {
                         Field field = requestBody.getClass().getDeclaredField("unitId");
                         field.setAccessible(true);
                         Object value = field.get(requestBody);
-                        if (value instanceof Long) {
-                            return (Long) value;
-                        }
+                        if (value instanceof Long) return (Long) value;
                         if (value instanceof String) {
-                            try {
-                                return Long.valueOf((String) value);
-                            } catch (NumberFormatException ignored) {}
+                            try { return Long.valueOf((String) value); } catch (NumberFormatException ignored) {}
                         }
                     } catch (NoSuchFieldException | IllegalAccessException ignored) {}
                 }

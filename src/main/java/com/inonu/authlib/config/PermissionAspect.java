@@ -67,10 +67,8 @@ public class PermissionAspect {
         // Eksik olan alanları logla
         validateFields(userId, unitId, appId, appIdProp);
 
-        logger.info("Yetki kontrolü yapılan kullanıcı ID: {}, App ID: {}, Unit ID: {}", userId, appId, unitId);
 
         List<String> privileges = privilegeCacheService.getUserPrivileges(userId);
-        logger.info("Kullanıcının yetkileri: {}", privileges);
 
         checkPermissions(joinPoint, privileges, appId, unitId);
 
@@ -107,16 +105,6 @@ public class PermissionAspect {
         boolean appIdMissing = (appId == null);
 
         if (userIdMissing || unitIdMissing || appIdMissing) {
-            logger.error(
-                    "Geçersiz yetkilendirme isteği! Eksik alanlar: {}{}{}. " +
-                            "[userId headerdan: '{}'] " +
-                            "[unitId param/annotation/body/header: '{}'] " +
-                            "[appId property: '{}']",
-                    userIdMissing ? "userId " : "",
-                    unitIdMissing ? "unitId " : "",
-                    appIdMissing ? "appId" : "",
-                    userId, unitId, appIdProp
-            );
             throw new PrivilegeNotFoundException(
                     "Kullanıcı kimlik doğrulaması mevcut değil. Eksik alan(lar): " +
                             (userIdMissing ? "userId " : "") +
@@ -143,7 +131,6 @@ public class PermissionAspect {
 
             boolean hasPermission = Arrays.stream(roleSuffixes)
                     .map(suffix -> "APP" + appId + "_UNIT" + unitId + "_" + suffix)
-                    .peek(fullRole -> logger.info("Oluşan yetki ifadesi: {}", fullRole))
                     .anyMatch(privileges::contains);
 
             if (!hasPermission) {
